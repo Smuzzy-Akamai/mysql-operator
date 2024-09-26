@@ -20,11 +20,11 @@ else:
 
 
 # Constants
-OPERATOR_VERSION = "2.2.2"
+OPERATOR_VERSION = "2.2.3"
 OPERATOR_EDITION = Edition.community
 OPERATOR_EDITION_NAME_TO_ENUM = { edition.value : edition.name for edition in Edition }
 
-DEFAULT_VERSION_TAG = "9.1.0"
+DEFAULT_VERSION_TAG = "9.2.0"
 
 MIN_BASE_SERVER_ID = 1
 MAX_BASE_SERVER_ID = 4000000000
@@ -42,7 +42,7 @@ DISABLED_MYSQL_VERSION = {
 DEFAULT_ROUTER_VERSION_TAG = DEFAULT_VERSION_TAG
 
 # This is used for the sidecar. The operator version is deploy-operator.yaml
-DEFAULT_OPERATOR_VERSION_TAG = "9.1.0-2.2.2"
+DEFAULT_OPERATOR_VERSION_TAG = f"{DEFAULT_VERSION_TAG}-{OPERATOR_VERSION}"
 
 DEFAULT_IMAGE_REPOSITORY = os.getenv(
     "MYSQL_OPERATOR_DEFAULT_REPOSITORY", default="container-registry.oracle.com/mysql").rstrip('/')
