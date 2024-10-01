@@ -64,7 +64,9 @@ def start_clone_seed_pod(session: 'ClassicSession',
 
         with SessionWrap(donor_co) as donor:
             logger.info(f"Starting server clone from {clone_spec.uri}")
-            return mysqlutils.clone_server(donor_co, donor, session, logger)
+            ret = mysqlutils.clone_server(donor_co, donor, session, logger)
+            logger.info("Cloning finished")
+            return ret
     except mysqlsh.Error as e:
         if mysqlutils.is_client_error(e.code) or e.code == mysqlsh.mysql.ErrorCode.ER_ACCESS_DENIED_ERROR:
             # TODO check why are we still getting access denied here, the container should have all accounts ready by now

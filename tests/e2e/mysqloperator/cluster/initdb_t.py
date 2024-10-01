@@ -22,23 +22,28 @@ from utils.optesting import DEFAULT_MYSQL_ACCOUNTS, COMMON_OPERATOR_ERRORS
 
 class ClusterFromClone(tutil.OperatorTest):
     default_allowed_op_errors = COMMON_OPERATOR_ERRORS
+    instances = 3
+    cluster_name = "mycluster"
+    copycluster_name = "copycluster"
+    copycluster_ns = "clone"
+    copycluster_wantedinstances = 2
+    cloned_cluster_ns = "clone"
 
     @classmethod
     def setUpClass(cls):
         cls.logger = logging.getLogger(__name__+":"+cls.__name__)
         super().setUpClass()
 
-        g_full_log.watch_mysql_pod("cloned", "mycluster-0")
-        g_full_log.watch_mysql_pod(cls.ns, "mycluster-0")
-        g_full_log.watch_mysql_pod(cls.ns, "mycluster-1")
-        g_full_log.watch_mysql_pod(cls.ns, "mycluster-2")
+        g_full_log.watch_mysql_pod(cls.copycluster_ns, f"{cls.copycluster_name}-0")
+        for instance in range(0, cls.instances):
+            g_full_log.watch_mysql_pod(cls.ns, f"{cls.cluster_name}-{instance}")
+
 
     @classmethod
     def tearDownClass(cls):
-        g_full_log.stop_watch(cls.ns, "mycluster-2")
-        g_full_log.stop_watch(cls.ns, "mycluster-1")
-        g_full_log.stop_watch(cls.ns, "mycluster-0")
-        g_full_log.stop_watch("cloned", "mycluster-0")
+        for instance in reversed(range(0, cls.instances)):
+            g_full_log.stop_watch(cls.ns, f"{cls.cluster_name}-{instance}")
+        g_full_log.stop_watch(cls.copycluster_ns, f"{cls.copycluster_name}-0")
 
         super().tearDownClass()
 
@@ -47,41 +52,40 @@ class ClusterFromClone(tutil.OperatorTest):
             self.ns, "mypwds", root_user="root", root_host="%", root_pass="sakila")
 
         # create cluster with mostly default configs
-        yaml = """
-apiVersion: mysql.oracle.com/v2
-kind: InnoDBCluster
-metadata:
-  name: mycluster
-spec:
-  instances: 3
-  secretName: mypwds
-  tlsUseSelfSigned: true
-"""
+        yaml = f"""
+ apiVersion: mysql.oracle.com/v2
+ kind: InnoDBCluster
+ metadata:
+   name: {self.cluster_name}
+ spec:
+   instances: {self.instances}
+   secretName: mypwds
+   tlsUseSelfSigned: true
+ """
 
         kutil.apply(self.ns, yaml)
 
-        self.wait_pod("mycluster-0", "Running")
-        self.wait_pod("mycluster-1", "Running")
-        self.wait_pod("mycluster-2", "Running")
+        self.wait_ic(self.cluster_name, ["PENDING", "INITIALIZING", "ONLINE"])
 
-        self.wait_ic("mycluster", "ONLINE", 3)
+        for instance in range(0, self.instances):
+            self.wait_pod(f"{self.cluster_name}-{instance}", "Running")
+
+        self.wait_ic(self.cluster_name, "ONLINE", self.instances)
 
         script = open(tutil.g_test_data_dir+"/sql/sakila-schema.sql").read()
         script += open(tutil.g_test_data_dir+"/sql/sakila-data.sql").read()
 
-        mutil.load_script(self.ns, ["mycluster-0", "mysql"], script)
+        mutil.load_script(self.ns, [f"{self.cluster_name}-0", "mysql"], script)
 
-        with mutil.MySQLPodSession(self.ns, "mycluster-0", "root", "sakila") as s:
+        with mutil.MySQLPodSession(self.ns, f"{self.cluster_name}-0", "root", "sakila") as s:
             s.exec_sql("create user clone@'%' identified by 'clonepass'")
             s.exec_sql("grant backup_admin on *.* to clone@'%'")
 
     def test_1_create_clone(self):
         # TODO add support for using different root password between clusters
-        kutil.create_ns("clone", g_ts_cfg.get_custom_test_ns_labels())
-        kutil.create_user_secrets(
-            "clone", "pwds", root_user="root", root_host="%", root_pass="sakila")
-        kutil.create_user_secrets(
-            "clone", "donorpwds", root_user="root", root_host="%", root_pass="sakila")
+        kutil.create_ns(self.cloned_cluster_ns, g_ts_cfg.get_custom_test_ns_labels())
+        kutil.create_user_secrets(self.cloned_cluster_ns, "pwds", root_user="root", root_host="%", root_pass="sakila")
+        kutil.create_user_secrets(self.cloned_cluster_ns, "donorpwds", root_user="root", root_host="%", root_pass="sakila")
 
         # create cluster with mostly default configs
         yaml = f"""
@@ -98,27 +102,28 @@ spec:
   baseServerId: 2000
   initDB:
     clone:
-      donorUrl: root@mycluster-0.mycluster-instances.{self.ns}.svc.cluster.local:3306
+      donorUrl: root@{self.cluster_name}-0.{self.cluster_name}-instances.{self.ns}.svc.cluster.local:3306
       secretKeyRef:
         name: donorpwds
 """
 
-        kutil.apply("clone", yaml)
+        kutil.apply(self.cloned_cluster_ns, yaml)
 
-        self.wait_pod("copycluster-0", "Running", ns="clone")
+        self.wait_pod(f"{self.copycluster_name}-0", "Running", ns=self.cloned_cluster_ns)
 
-        self.wait_ic("copycluster", "ONLINE", 1, ns="clone", timeout=300)
+        self.wait_ic(self.copycluster_name, "ONLINE", 1, ns=self.cloned_cluster_ns, timeout=300)
 
-        with mutil.MySQLPodSession(self.ns, "mycluster-0", "root", "sakila") as s:
+        with mutil.MySQLPodSession(self.ns, f"{self.cluster_name}-0", "root", "sakila") as s:
             orig_tables = [r[0] for r in s.query_sql(
                 "show tables in sakila").fetch_all()]
 
-        with mutil.MySQLPodSession("clone", "copycluster-0", "root", "sakila") as s:
+        with mutil.MySQLPodSession(self.cloned_cluster_ns, f"{self.copycluster_name}-0", "root", "sakila") as s:
             clone_tables = [r[0] for r in s.query_sql(
                 "show tables in sakila").fetch_all()]
 
             # add some data with binlog disabled to make sure that all members of this
             # cluster are cloned
+
             s.exec_sql("set autocommit=1")
             s.exec_sql("set session sql_log_bin=0")
             s.exec_sql("create schema unlogged_db")
@@ -131,20 +136,21 @@ spec:
         #     with mutil.MySQLPodSession("clone", "copycluster-0", "root", "sakila") as s:
         #         pass
 
-        check_routing.check_pods(self, "clone", "copycluster", 1)
+        check_routing.check_pods(self, self.cloned_cluster_ns, self.copycluster_name, 1)
 
         # TODO also make sure the source field in the ic says clone and not blank
 
     def test_2_grow(self):
-        kutil.patch_ic("clone", "copycluster", {
-                       "spec": {"instances": 2}}, type="merge")
+        kutil.patch_ic(self.cloned_cluster_ns, self.copycluster_name, {
+                       "spec": {"instances": self.copycluster_wantedinstances}}, type="merge")
 
-        self.wait_pod("copycluster-1", "Running", ns="clone")
+        for instance in range(1, self.copycluster_wantedinstances):
+            self.wait_pod(f"{self.copycluster_name}-{instance}", "Running", ns=self.cloned_cluster_ns)
 
-        self.wait_ic("copycluster", "ONLINE", 2, ns="clone")
+        self.wait_ic(self.copycluster_name, "ONLINE", self.copycluster_wantedinstances, ns=self.cloned_cluster_ns)
 
         # check that the new instance was cloned
-        with mutil.MySQLPodSession("clone", "copycluster-1", "root", "sakila") as s:
+        with mutil.MySQLPodSession(self.cloned_cluster_ns, f"{self.copycluster_name}-1", "root", "sakila") as s:
             self.assertEqual(
                 str(s.query_sql("select * from unlogged_db.tbl").fetch_all()), str([(42,)]))
 
@@ -152,18 +158,18 @@ spec:
         pass  # TODO
 
     def test_9_destroy(self):
-        kutil.delete_ic("clone", "copycluster")
-        self.wait_pod_gone("copycluster-1", ns="clone")
-        self.wait_pod_gone("copycluster-0", ns="clone")
-        self.wait_ic_gone("copycluster", ns="clone")
-        kutil.delete_ns("clone")
+        kutil.delete_ic(self.cloned_cluster_ns, self.copycluster_name)
+        for instance in reversed(range(0, self.copycluster_wantedinstances)):
+            self.wait_pod_gone(f"{self.copycluster_name}-{instance}", ns=self.cloned_cluster_ns)
+        self.wait_pod_gone(f"{self.copycluster_name}-0", ns=self.cloned_cluster_ns)
+        self.wait_ic_gone(self.copycluster_name, ns=self.cloned_cluster_ns)
+        kutil.delete_ns(self.cloned_cluster_ns)
 
         kutil.delete_ic(self.ns, "mycluster")
 
-        self.wait_pod_gone("mycluster-2")
-        self.wait_pod_gone("mycluster-1")
-        self.wait_pod_gone("mycluster-0")
-        self.wait_ic_gone("mycluster")
+        for instance in reversed(range(0, self.instances)):
+            self.wait_pod_gone(f"{self.cluster_name}-{instance}")
+        self.wait_ic_gone(self.cluster_name)
 
 
 # class ClusterFromCloneErrors(tutil.OperatorTest):
