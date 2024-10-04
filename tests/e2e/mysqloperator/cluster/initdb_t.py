@@ -159,16 +159,13 @@ spec:
 
     def test_9_destroy(self):
         kutil.delete_ic(self.cloned_cluster_ns, self.copycluster_name)
-        for instance in reversed(range(0, self.copycluster_wantedinstances)):
-            self.wait_pod_gone(f"{self.copycluster_name}-{instance}", ns=self.cloned_cluster_ns)
-        self.wait_pod_gone(f"{self.copycluster_name}-0", ns=self.cloned_cluster_ns)
+        self.wait_pods_gone(f"{self.copycluster_name}-*", ns=self.cloned_cluster_ns)
         self.wait_ic_gone(self.copycluster_name, ns=self.cloned_cluster_ns)
         kutil.delete_ns(self.cloned_cluster_ns)
 
-        kutil.delete_ic(self.ns, "mycluster")
+        kutil.delete_ic(self.ns, self.cluster_name)
 
-        for instance in reversed(range(0, self.instances)):
-            self.wait_pod_gone(f"{self.cluster_name}-{instance}")
+        self.wait_pods_gone(f"{self.cluster_name}-*")
         self.wait_ic_gone(self.cluster_name)
 
 
@@ -191,20 +188,23 @@ class ClusterFromDumpOCI(tutil.OperatorTest):
     oci_storage_prefix = f"/e2etest/{g_ts_cfg.get_worker_label()}"
     oci_storage_output = None
 
+    instances = 1
+    cluster_name = "mycluster"
+    newcluster_name = "newmycluster"
+    newcluster_wantedinstances = 2
+
     @classmethod
     def setUpClass(cls):
         cls.logger = logging.getLogger(__name__+":"+cls.__name__)
         super().setUpClass()
 
-        g_full_log.watch_mysql_pod(cls.ns, "mycluster-0")
-        g_full_log.watch_mysql_pod(cls.ns, "mycluster-1")
-        g_full_log.watch_mysql_pod(cls.ns, "mycluster-2")
+        for instance in range(0, cls.instances):
+            g_full_log.watch_mysql_pod(cls.ns, f"{cls.cluster_name}-{instance}")
 
     @classmethod
     def tearDownClass(cls):
-        g_full_log.stop_watch(cls.ns, "mycluster-2")
-        g_full_log.stop_watch(cls.ns, "mycluster-1")
-        g_full_log.stop_watch(cls.ns, "mycluster-0")
+        for instance in reversed(range(0, cls.instances)):
+            g_full_log.stop_watch(cls.ns, f"{cls.cluster_name}-{instance}")
 
         super().tearDownClass()
 
@@ -227,9 +227,9 @@ class ClusterFromDumpOCI(tutil.OperatorTest):
 apiVersion: mysql.oracle.com/v2
 kind: InnoDBCluster
 metadata:
-  name: mycluster
+  name: {self.cluster_name}
 spec:
-  instances: 1
+  instances: {self.instances}
   secretName: mypwds
   tlsUseSelfSigned: true
   backupProfiles:
@@ -244,16 +244,17 @@ spec:
 
         kutil.apply(self.ns, yaml)
 
-        self.wait_pod("mycluster-0", "Running")
-        self.wait_ic("mycluster", "ONLINE", 1)
+        for instance in range(0, self.instances):
+            self.wait_pod(f"{self.cluster_name}-{instance}", "Running")
+        self.wait_ic(self.cluster_name, "ONLINE", self.instances)
 
         script = open(tutil.g_test_data_dir+"/sql/sakila-schema.sql").read()
         script += open(tutil.g_test_data_dir+"/sql/sakila-data.sql").read()
 
-        mutil.load_script(self.ns, "mycluster-0", script)
+        mutil.load_script(self.ns, f"{self.cluster_name}-0", script)
 
         self.__class__.orig_tables = []
-        with mutil.MySQLPodSession(self.ns, "mycluster-0", "root", "sakila") as s:
+        with mutil.MySQLPodSession(self.ns, f"{self.cluster_name}-0", "root", "sakila") as s:
             self.__class__.orig_tables = [r[0]
                                 for r in s.query_sql("show tables in sakila").fetch_all()]
 
@@ -264,7 +265,7 @@ kind: MySQLBackup
 metadata:
   name: {self.dump_name}
 spec:
-  clusterName: mycluster
+  clusterName: {self.cluster_name}
   backupProfileName: fulldump-oci
 """
         kutil.apply(self.ns, yaml)
@@ -284,9 +285,9 @@ spec:
                       check=check_mbk, timeout=300)
 
         # destroy the test cluster
-        kutil.delete_ic(self.ns, "mycluster")
-        self.wait_pod_gone("mycluster-0")
-        self.wait_ic_gone("mycluster")
+        kutil.delete_ic(self.ns, self.cluster_name)
+        self.wait_pods_gone(f"{self.cluster_name}-*")
+        self.wait_ic_gone(self.cluster_name)
 
         # delete the pv and pvc for mycluster-0
         kutil.delete_pvc(self.ns, None)
@@ -308,7 +309,7 @@ spec:
 apiVersion: mysql.oracle.com/v2
 kind: InnoDBCluster
 metadata:
-  name: newcluster
+  name: {self.newcluster_name}
 spec:
   instances: 1
   router:
@@ -328,11 +329,14 @@ spec:
 
         kutil.apply(self.ns, yaml)
 
-        self.wait_pod("newcluster-0", "Running")
+        self.wait_pod(f"{self.newcluster_name}-0", "Running")
 
-        self.wait_ic("newcluster", "ONLINE", 1, timeout=600)
+        self.wait_ic(self.newcluster_name, "ONLINE", 1, timeout=600)
+        pods = kutil.ls_po(self.ns, pattern=(self.newcluster_name + "-.*"))
+        print(pods)
+        self.wait_routers(f"{self.newcluster_name}-router-*", 1)
 
-        with mutil.MySQLPodSession(self.ns, "newcluster-0", "root", "sakila") as s:
+        with mutil.MySQLPodSession(self.ns, f"{self.newcluster_name}-0", "root", "sakila") as s:
             tables = [r[0]
                       for r in s.query_sql("show tables in sakila").fetch_all()]
 
@@ -348,7 +352,9 @@ spec:
             # s.exec_sql("insert into unlogged_db.tbl values (42)")
             # s.exec_sql("set session sql_log_bin=1")
 
-        check_routing.check_pods(self, self.ns, "newcluster", 1)
+        pods = kutil.ls_po(self.ns, pattern=(self.newcluster_name + ".*"))
+        print(pods)
+        check_routing.check_pods(self, self.ns, self.newcluster_name, 1)
 
         # TODO also make sure the source field in the ic says clone and not blank
 
@@ -356,12 +362,16 @@ spec:
         """
         Ensures that a cluster created from a dump can be scaled up properly
         """
-        kutil.patch_ic(self.ns, "newcluster", {
-                       "spec": {"instances": 2}}, type="merge")
+        kutil.patch_ic(self.ns, self.newcluster_name, {
+                       "spec": {"instances": self.newcluster_wantedinstances }}, type="merge")
 
-        self.wait_pod("newcluster-1", "Running")
+        pods = kutil.ls_po(self.ns, pattern=(self.newcluster_name + ".*"))
+        print(pods)
+        for instance in range(1, self.newcluster_wantedinstances):
+            print(f"Waiting for pod {self.newcluster_name}-{instance}")
+            self.wait_pod(f"{self.newcluster_name}-{instance}", "Running")
 
-        self.wait_ic("newcluster", "ONLINE", 2)
+        self.wait_ic(self.newcluster_name, "ONLINE", self.newcluster_wantedinstances)
 
         # TODO: see comment at line 334 where unlogged_db should be created
         # check that the new instance was provisioned through clone and not incremental
@@ -370,10 +380,10 @@ spec:
         #         str(s.query_sql("select * from unlogged_db.tbl").fetch_all()), str([[42]]))
 
     def test_1_2_destroy(self):
-        kutil.delete_ic(self.ns, "newcluster")
+        kutil.delete_ic(self.ns, self.newcluster_name)
 
-        self.wait_pod_gone("newcluster-0")
-        self.wait_ic_gone("newcluster")
+        self.wait_pods_gone(f"{self.newcluster_name}-*")
+        self.wait_ic_gone(self.newcluster_name)
 
         kutil.delete_pvc(self.ns, None)
 
@@ -390,7 +400,7 @@ spec:
 apiVersion: mysql.oracle.com/v2
 kind: InnoDBCluster
 metadata:
-  name: newcluster
+  name: {self.newcluster_name}
 spec:
   instances: 1
   router:
@@ -413,30 +423,27 @@ spec:
 
         kutil.apply(self.ns, yaml)
 
-        self.wait_pod("newcluster-0", "Running")
+        self.wait_pod(f"{self.newcluster_name}-0", "Running")
+        self.wait_ic(self.newcluster_name, "ONLINE", 1, timeout=600)
 
-        self.wait_ic("newcluster", "ONLINE", 1, timeout=600)
-
-        with mutil.MySQLPodSession(self.ns, "newcluster-0", "root", "sakila") as s:
+        with mutil.MySQLPodSession(self.ns, f"{self.newcluster_name}-0", "root", "sakila") as s:
             tables = [r[0]
                       for r in s.query_sql("show tables in sakila").fetch_all()]
 
             self.assertEqual(set(self.__class__.orig_tables), set(tables))
 
-        check_routing.check_pods(self, self.ns, "newcluster", 1)
+        check_routing.check_pods(self, self.ns, self.newcluster_name, 1)
 
     def test_9_destroy(self):
-        kutil.delete_ic(self.ns, "mycluster")
+        kutil.delete_ic(self.ns, self.cluster_name)
 
-        self.wait_pod_gone("mycluster-2")
-        self.wait_pod_gone("mycluster-1")
-        self.wait_pod_gone("mycluster-0")
-        self.wait_ic_gone("mycluster")
+        self.wait_pods_gone(f"{self.cluster_name}-*")
+        self.wait_ic_gone(self.cluster_name)
 
-        kutil.delete_ic(self.ns, "newcluster")
+        kutil.delete_ic(self.ns, self.newcluster_name)
 
-        self.wait_pod_gone("newcluster-0")
-        self.wait_ic_gone("newcluster")
+        self.wait_pods_gone(f"{self.newcluster_name}-*")
+        self.wait_ic_gone(self.newcluster_name)
 
         kutil.delete_secret(self.ns, "restore-apikey")
         kutil.delete_secret(self.ns, "backup-apikey")
