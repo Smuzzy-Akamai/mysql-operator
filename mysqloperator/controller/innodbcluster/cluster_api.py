@@ -1024,6 +1024,7 @@ class RouterSpec:
         if "routingOptions" in spec:
             self.routingOptions = dget_dict(spec, "routingOptions", prefix)
 
+
 class ServiceSpec:
     type: str = "ClusterIP"
     annotations: dict = {}
@@ -1456,20 +1457,21 @@ class InnoDBClusterSpec(AbstractServerSetSpec):
         self.service = ServiceSpec()
         section = InnoDBClusterSpecProperties.SERVICE.value
         if section in spec:
-            self.service.parse(dget_dict(spec, section, "spec"), "spec.service")
+            self.service.parse(dget_dict(spec, section, "spec"), f"spec.{section}")
 
         # Router Options
         self.router = RouterSpec()
         section = InnoDBClusterSpecProperties.ROUTER.value
         if section in spec:
-            self.router.parse(dget_dict(spec, section, "spec"), "spec.router")
+            self.router.parse(dget_dict(spec, section, "spec"), f"spec.{section}")
 
         if not self.router.tlsSecretName:
             self.router.tlsSecretName = f"{self.name}-router-tls"
 
         # Initialization Options
+        section = "initDB"
         if "initDB" in spec:
-            self.load_initdb(dget_dict(spec, "initDB", "spec"))
+            self.load_initdb(dget_dict(spec, section, "spec"))
 
         self.backupProfiles = []
         section = InnoDBClusterSpecProperties.BACKUP_PROFILES.value
@@ -1486,11 +1488,12 @@ class InnoDBClusterSpec(AbstractServerSetSpec):
                 self.backupSchedules.append(self.parse_backup_schedule(schedule))
 
         self.readReplicas = []
-        if "readReplicas" in spec:
-            read_replicas = dget_list(spec, "readReplicas", "spec", [], content_type=dict)
+        section = "readReplicas"
+        if section in spec:
+            read_replicas = dget_list(spec, section, "spec", [], content_type=dict)
             i = 0
             for replica in read_replicas:
-                self.readReplicas.append(self.parse_read_replica(spec, replica, f"spec.readReplicas[{i}]"))
+                self.readReplicas.append(self.parse_read_replica(spec, replica, f"spec.{section}[{i}]"))
                 i += 1
 
 
