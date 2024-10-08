@@ -1468,11 +1468,6 @@ class InnoDBClusterSpec(AbstractServerSetSpec):
         if not self.router.tlsSecretName:
             self.router.tlsSecretName = f"{self.name}-router-tls"
 
-        # Initialization Options
-        section = "initDB"
-        if "initDB" in spec:
-            self.load_initdb(dget_dict(spec, section, "spec"))
-
         self.backupProfiles = []
         section = InnoDBClusterSpecProperties.BACKUP_PROFILES.value
         if section in spec:
