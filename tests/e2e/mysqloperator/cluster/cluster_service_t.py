@@ -1,4 +1,4 @@
-# Copyright (c) 2023, Oracle and/or its affiliates.
+# Copyright (c) 2023, 2024 Oracle and/or its affiliates.
 #
 # Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl/
 #
@@ -19,19 +19,27 @@ SQL_MY_ROLE = """
 
 class ClusterService(tutil.OperatorTest):
     default_allowed_op_errors = COMMON_OPERATOR_ERRORS
+    instances = 2
+    cluster_name = "mycluster"
+    service_name = "mycluster" # should be as cluster_name
+    secret_name = "mypwds"
+    ann_name = "mycluster.example.com/ann"
+    ann_value = "ann-value"
+    label_name = "x-mylabel"
+    label_value = "l-value"
 
     @classmethod
     def setUpClass(cls):
         cls.logger = logging.getLogger(__name__+":"+cls.__name__)
         super().setUpClass()
 
-        g_full_log.watch_mysql_pod(cls.ns, "mycluster-0")
-        g_full_log.watch_mysql_pod(cls.ns, "mycluster-1")
+        for instance in range(0, cls.instances):
+            g_full_log.watch_mysql_pod(cls.ns, f"{cls.cluster_name}-{instance}")
 
     @classmethod
     def tearDownClass(cls):
-        g_full_log.stop_watch(cls.ns, "mycluster-0")
-        g_full_log.stop_watch(cls.ns, "mycluster-1")
+        for instance in reversed(range(0, cls.instances)):
+            g_full_log.stop_watch(cls.ns, f"{cls.cluster_name}-{instance}")
 
         super().tearDownClass()
 
@@ -40,40 +48,40 @@ class ClusterService(tutil.OperatorTest):
         Create cluster, check posted events.
         """
         kutil.create_user_secrets(
-            self.ns, "mypwds", root_user="root", root_host="%", root_pass="sakila")
+            self.ns, self.secret_name, root_user="root", root_host="%", root_pass="sakila")
 
         # create cluster with mostly default configs
-        yaml = """
+        yaml = f"""
 apiVersion: mysql.oracle.com/v2
 kind: InnoDBCluster
 metadata:
-  name: mycluster
+  name: {self.cluster_name}
 spec:
-  instances: 2
+  instances: {self.instances}
   router:
     instances: 1
-  secretName: mypwds
+  secretName: {self.secret_name}
   edition: community
   tlsUseSelfSigned: true
   service:
     defaultPort: mysql-rw-split
     labels:
-        x-mylabel: "l-value"
+      {self.label_name}: "{self.label_value}"
     annotations:
-      mycluster.example.com/ann: "ann-value"
+      {self.ann_name}: "{self.ann_value}"
 """
 
         kutil.apply(self.ns, yaml)
 
-        self.wait_ic("mycluster", ["PENDING", "INITIALIZING", "ONLINE"])
+        self.wait_ic(self.cluster_name, ["PENDING", "INITIALIZING", "ONLINE"])
 
-        self.wait_pod("mycluster-0", "Running")
-        self.wait_pod("mycluster-1", "Running")
+        for instance in range(0, self.instances):
+            self.wait_pod(f"{self.cluster_name}-{instance}", "Running")
 
-        self.wait_ic("mycluster", "ONLINE")
+        self.wait_ic(self.cluster_name, "ONLINE", self.instances)
 
     def test_01_check_rw_split(self):
-        with mutil.MySQLPodSession(self.ns, "mycluster", "root", "sakila",
+        with mutil.MySQLPodSession(self.ns, self.service_name, "root", "sakila",
                                    3306, "service") as s:
             # ensure we are in autocommit mode to be predicatble
             s.exec_sql("set autocommit=1")
@@ -84,14 +92,11 @@ spec:
             self.assertEqual(res.fetch_one()[0], "PRIMARY")
 
     def test_02_check_annotation_and_label(self):
-        service = kutil.get_svc(self.ns, "mycluster")
+        service = kutil.get_svc(self.ns, self.service_name)
 
-        self.assertEqual(
-            service['metadata']['annotations']['mycluster.example.com/ann'],
-            'ann-value')
+        self.assertEqual(service['metadata']['annotations'][self.ann_name], self.ann_value)
 
-        self.assertEqual(
-            service['metadata']['labels']['x-mylabel'], 'l-value')
+        self.assertEqual(service['metadata']['labels'][self.label_name], self.label_value)
 
     def test_03_read_write(self):
         patch = {
@@ -101,9 +106,9 @@ spec:
                 }
             }
         }
-        kutil.patch_ic(self.ns, "mycluster", patch, type="merge")
+        kutil.patch_ic(self.ns, self.cluster_name, patch, type="merge")
         sleep(1)
-        with mutil.MySQLPodSession(self.ns, "mycluster", "root", "sakila",
+        with mutil.MySQLPodSession(self.ns, self.service_name, "root", "sakila",
                                    3306, "service") as s:
             res = s.query_sql(SQL_MY_ROLE)
             self.assertEqual(res.fetch_one()[0], "PRIMARY")
@@ -117,67 +122,70 @@ spec:
                 }
             }
         }
-        kutil.patch_ic(self.ns, "mycluster", patch, type="merge")
+        kutil.patch_ic(self.ns, self.cluster_name, patch, type="merge")
         sleep(1)
-        with mutil.MySQLPodSession(self.ns, "mycluster", "root", "sakila",
+        with mutil.MySQLPodSession(self.ns, self.service_name, "root", "sakila",
                                    3306, "service") as s:
             res = s.query_sql(SQL_MY_ROLE)
             self.assertEqual(res.fetch_one()[0], "SECONDARY")
 
     def test_05_patch_annotation(self):
+        new_ann_value = "new-value"
         patch = {
             "spec": {
                 "service": {
                     "annotations": {
-                        "mycluster.example.com/ann": "new-value"
+                        self.ann_name: new_ann_value
                     }
                 }
             }
         }
-        kutil.patch_ic(self.ns, "mycluster", patch, type="merge")
+        kutil.patch_ic(self.ns, self.cluster_name, patch, type="merge")
         sleep(1)
-        service = kutil.get_svc(self.ns, "mycluster")
+        service = kutil.get_svc(self.ns, self.service_name)
 
-        self.assertEqual(
-            service['metadata']['annotations']['mycluster.example.com/ann'],
-            "new-value")
+        self.assertEqual(service['metadata']['annotations'][self.ann_name], new_ann_value)
 
     def test_05_patch_label(self):
+        new_label_name = "one-more"
+        new_label_value = "new-label-value"
         patch = {
             "spec": {
                 "service": {
                     "labels": {
-                        "one-more": "new-value"
+                        new_label_name: new_label_value
                     }
                 }
             }
         }
-        kutil.patch_ic(self.ns, "mycluster", patch, type="merge")
+        kutil.patch_ic(self.ns, self.cluster_name, patch, type="merge")
         sleep(1)
-        service = kutil.get_svc(self.ns, "mycluster")
+        service = kutil.get_svc(self.ns, self.service_name)
 
-        self.assertEqual(service['metadata']['labels']['one-more'], 'new-value')
+        self.assertEqual(service['metadata']['labels'][new_label_name], new_label_value)
 
     def test_06_service_type_load_balancer(self):
+        service = kutil.get_svc(self.ns, self.service_name)
+        print(f'Old svc type is {service["spec"]["type"]}')
+        svc_type = "LoadBalancer"
         patch = {
             "spec": {
                 "service": {
-                    "type": "LoadBalancer"
+                    "type": svc_type
                 }
             }
         }
-        kutil.patch_ic(self.ns, "mycluster", patch, type="merge")
+        kutil.patch_ic(self.ns, self.cluster_name, patch, type="merge")
         sleep(1)
-        service = kutil.get_svc(self.ns, "mycluster")
+        service = kutil.get_svc(self.ns, self.service_name)
 
         # we don't have any guarantee that we got an external IP and that we
         # can route there from anywhere, we can only verify we set the right
         # type
-        self.assertEqual(service["spec"]["type"], "LoadBalancer")
+        self.assertEqual(service["spec"]["type"], svc_type)
 
     def test_99_destroy(self):
-        kutil.delete_ic(self.ns, "mycluster")
+        kutil.delete_ic(self.ns, self.cluster_name)
 
-        self.wait_pod_gone("mycluster-0")
-        self.wait_pod_gone("mycluster-1")
-        self.wait_ic_gone("mycluster")
+        self.wait_pods_gone(f"{self.cluster_name}-*")
+        self.wait_ic_gone(self.cluster_name)
