@@ -332,6 +332,18 @@ spec:
                         read_only_targets:
                           type: string
                           enum: ["all", "read_replicas", "secondaries"]
+                instanceService:
+                  type: object
+                  description: "Configuration of the Service used by the InnoDB Cluster GR members internally"
+                  properties:
+                    annotations:
+                      type: object
+                      description: "Custom annotations for the Service"
+                      x-kubernetes-preserve-unknown-fields: true
+                    labels:
+                      type: object
+                      description: "Custom labels for the Service"
+                      x-kubernetes-preserve-unknown-fields: true
                 service:
                   type: object
                   description: "Configuration of the Service used by applications connecting to the InnoDB Cluster"
@@ -339,7 +351,7 @@ spec:
                     type:
                       type: string
                       enum: ["ClusterIP", "NodePort", "LoadBalancer"]
-                      default: ClusterIP
+                      default: "ClusterIP"
                     annotations:
                       type: object
                       description: "Custom annotations for the Service"

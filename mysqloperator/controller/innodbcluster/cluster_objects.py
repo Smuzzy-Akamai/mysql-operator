@@ -31,6 +31,7 @@ def prepare_cluster_service(spec: AbstractServerSetSpec, logger: Logger) -> dict
         extra_label = f"mysql.oracle.com/read-replica: {spec.name}"
     else:
         raise NotImplementedError(f"Unknown subtype {type(spec)} for creating StatefulSet")
+
     tmpl = f"""
 apiVersion: v1
 kind: Service
@@ -65,6 +66,17 @@ spec:
 """
 
     svc = yaml.safe_load(tmpl)
+
+    if spec.instanceService.annotations:
+        if not 'annotations' in svc['metadata']:
+            svc['metadata']['annotations'] = {}
+        svc['metadata']['annotations'] = spec.instanceService.annotations
+
+    if spec.instanceService.labels:
+        if not 'labels' in svc['metadata']:
+            svc['metadata']['labels'] = {}
+        svc['metadata']['labels'] = spec.instanceService.labels | svc['metadata']['labels']
+
     for subsystem in spec.get_add_to_svc_cbs:
         print(f"\t\tChecking subsystem {subsystem}")
         for add_to_svc_cb in spec.get_add_to_svc_cbs[subsystem]:
@@ -854,6 +866,13 @@ def prepare_metrics_service_monitors(spec: AbstractServerSetSpec, logger: Logger
 def update_stateful_set_spec(sts : api_client.V1StatefulSet, patch: dict) -> None:
     api_apps.patch_namespaced_stateful_set(
         sts.metadata.name, sts.metadata.namespace, body=patch)
+
+
+def update_service(svc: api_client.V1Deployment, spec: InnoDBClusterSpec, logger: Logger) -> None:
+    body = prepare_cluster_service(spec, logger)
+    print(body)
+    api_core.patch_namespaced_service(svc.metadata.name, svc.metadata.namespace, body=body)
+
 
 def update_mysql_image(sts: api_client.V1StatefulSet, cluster: InnoDBCluster,
                        spec: AbstractServerSetSpec,

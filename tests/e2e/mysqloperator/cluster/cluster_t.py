@@ -1358,8 +1358,14 @@ spec:
 
         # ensure containers have the right version and edition
         pod = kutil.get_po(self.ns, "mycluster-0")
-        image = container_spec(
-            pod["spec"]["initContainers"], "initmysql")["image"]
+        image = container_spec(pod["spec"]["initContainers"], "initmysql")["image"]
+
+        init_containers_image_hashes = {c_status["name"]:c_status["imageID"].split("@")[1].split(':')[1] for c_status in pod["status"]["initContainerStatuses"] }
+        print(init_containers_image_hashes)
+
+        containers_image_hashes = {c_status["name"]:c_status["imageID"].split("@")[1].split(':')[1] for c_status in pod["status"]["containerStatuses"] }
+        print(containers_image_hashes)
+
         self.assertIn(":"+g_ts_cfg.version_tag, image, "initmysql")
         self.assertIn(g_ts_cfg.server_image_name+":", image, "initmysql")
 

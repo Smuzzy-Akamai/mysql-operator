@@ -189,3 +189,116 @@ spec:
 
         self.wait_pods_gone(f"{self.cluster_name}-*")
         self.wait_ic_gone(self.cluster_name)
+        kutil.delete_secret(self.ns, self.secret_name)
+
+
+class InstanceService(tutil.OperatorTest):
+    default_allowed_op_errors = COMMON_OPERATOR_ERRORS
+    instances = 2
+    cluster_name = "mycluster"
+    service_name = "mycluster-instances"
+    secret_name = "mypwds"
+    ann_name = "mycluster.example.com/ann"
+    ann_value = "ann-value"
+    label_name = "x-mylabel"
+    label_value = "l-value"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.logger = logging.getLogger(__name__+":"+cls.__name__)
+        super().setUpClass()
+
+        for instance in range(0, cls.instances):
+            g_full_log.watch_mysql_pod(cls.ns, f"{cls.cluster_name}-{instance}")
+
+    @classmethod
+    def tearDownClass(cls):
+        for instance in reversed(range(0, cls.instances)):
+            g_full_log.stop_watch(cls.ns, f"{cls.cluster_name}-{instance}")
+
+        super().tearDownClass()
+
+    def test_00_create(self):
+        """
+        Create cluster.
+        """
+        kutil.create_user_secrets(
+            self.ns, self.secret_name, root_user="root", root_host="%", root_pass="sakila")
+
+        # create cluster with mostly default configs
+        yaml = f"""
+apiVersion: mysql.oracle.com/v2
+kind: InnoDBCluster
+metadata:
+  name: {self.cluster_name}
+spec:
+  instances: {self.instances}
+  router:
+    instances: 1
+  secretName: {self.secret_name}
+  edition: community
+  tlsUseSelfSigned: true
+  instanceService:
+    labels:
+      {self.label_name}: "{self.label_value}"
+    annotations:
+      {self.ann_name}: "{self.ann_value}"
+"""
+
+        kutil.apply(self.ns, yaml)
+
+        self.wait_ic(self.cluster_name, ["PENDING", "INITIALIZING", "ONLINE"])
+
+        for instance in range(0, self.instances):
+            self.wait_pod(f"{self.cluster_name}-{instance}", "Running")
+
+        self.wait_ic(self.cluster_name, "ONLINE", self.instances)
+
+    def test_02_check_annotation_and_label(self):
+        service = kutil.get_svc(self.ns, self.service_name)
+
+        self.assertEqual(service['metadata']['annotations'][self.ann_name], self.ann_value)
+
+        self.assertEqual(service['metadata']['labels'][self.label_name], self.label_value)
+
+    def test_04_patch_annotation(self):
+        new_ann_value = "new-value"
+        patch = {
+            "spec": {
+                "instanceService": {
+                    "annotations": {
+                        self.ann_name: new_ann_value
+                    }
+                }
+            }
+        }
+        kutil.patch_ic(self.ns, self.cluster_name, patch, type="merge")
+        sleep(1)
+        service = kutil.get_svc(self.ns, self.service_name)
+
+        self.assertEqual(service['metadata']['annotations'][self.ann_name], new_ann_value)
+
+    def test_06_patch_label(self):
+        new_label_name = "one-more"
+        new_label_value = "new-label-value"
+        patch = {
+            "spec": {
+                "instanceService": {
+                    "labels": {
+                        new_label_name: new_label_value
+                    }
+                }
+            }
+        }
+        kutil.patch_ic(self.ns, self.cluster_name, patch, type="merge")
+        sleep(1)
+        service = kutil.get_svc(self.ns, self.service_name)
+
+        self.assertEqual(service['metadata']['labels'][new_label_name], new_label_value)
+
+    def test_99_destroy(self):
+        kutil.delete_ic(self.ns, self.cluster_name)
+
+        self.wait_pods_gone(f"{self.cluster_name}-*")
+        self.wait_ic_gone(self.cluster_name)
+        kutil.delete_secret(self.ns, self.secret_name)

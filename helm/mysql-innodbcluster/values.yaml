@@ -29,6 +29,19 @@ baseServerId: 1000
 #  podAnnotations:
 #  podLabels:
 
+#instanceService:
+#  annotations:
+#    ann1: "is_avalue1"
+#  labels:
+#    l1: "is_lvalue1"
+
+#service:
+#  type: "ClusterIP"
+#  annotations:
+#    ann1: "es_avalue1"
+#  labels:
+#    l1: "es_lvalue1"
+
 #datadirPermissions:
 #  setRightsUsingInitContainer: false
 #  fsGroupChangePolicy: "Always"

@@ -1025,6 +1025,18 @@ class RouterSpec:
             self.routingOptions = dget_dict(spec, "routingOptions", prefix)
 
 
+class InstanceServiceSpec:
+    annotations: dict = {}
+    labels: dict = {}
+
+    def parse(self, spec: dict, prefix: str) -> None:
+        if "annotations" in spec:
+            self.annotations = dget_dict(spec, "annotations", prefix)
+
+        if "labels" in spec:
+            self.labels = dget_dict(spec, "labels", prefix)
+
+
 class ServiceSpec:
     type: str = "ClusterIP"
     annotations: dict = {}
@@ -1069,6 +1081,7 @@ class DataDirPermissionsSpec:
 # Must correspond to the names in the CRD
 class InnoDBClusterSpecProperties(Enum):
     SERVICE = "service"
+    INSTANCE_SERVICE = "instanceService"
     LOGS = "logs"
     ROUTER = "router"
     BACKUP_PROFILES = "backupProfiles"
@@ -1109,6 +1122,7 @@ class AbstractServerSetSpec(abc.ABC):
     # override volumeClaimTemplates for datadir in MySQL pods (optional)
     datadirVolumeClaimTemplate = None
     dataDirPermissions: Optional[DataDirPermissionsSpec] = DataDirPermissionsSpec()
+
     # additional MySQL configuration options
     mycnf: str = ""
     # override pod template for MySQL (optional)
@@ -1272,6 +1286,12 @@ class AbstractServerSetSpec(abc.ABC):
         section = "datadirPermissions"
         if section in spec_root:
             self.dataDirPermissions.parse(dget_dict(spec_root, section, "spec"), f"spec.{section}")
+
+        self.instanceService = InstanceServiceSpec()
+        section = InnoDBClusterSpecProperties.INSTANCE_SERVICE.value
+        if section in spec_root:
+            self.instanceService.parse(dget_dict(spec_root, section, "spec"), f"spec.{section}")
+
 
     def print_backup_schedules(self) -> None:
         for schedule in self.backupSchedules:
