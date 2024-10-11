@@ -59,14 +59,15 @@ $> helm repo add mysql-operator https://mysql.github.io/mysql-operator/
 $> helm repo update
 ```
 
-Then deploy the operator:
+Then deploy the operator using the just added repository:
 
 ```sh
 $> helm install mysql-operator mysql-operator/mysql-operator --namespace mysql-operator --create-namespace
 ```
 
 This deploys the latest MySQL Operator for Kubernetes from DockerHub using all defaults; although the deployment 
-can be customized through a variety of options to override built-in defaults. See the documentation for details.
+can be customized through a variety of options to override built-in defaults. The name of the deployment is
+mysql-operator. See the documentation for details.
 
 ## MySQL InnoDB Cluster Installation
 
