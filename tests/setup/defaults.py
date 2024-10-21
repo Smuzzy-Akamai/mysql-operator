@@ -8,7 +8,7 @@ import os
 # version
 VERSION_TAG = "9.2.0"
 
-MIN_SUPPORTED_VERSION = "8.0.27"
+MIN_SUPPORTED_VERSION = "8.0.28"
 MAX_SUPPORTED_VERSION = "9.2.0"
 
 # image

@@ -1,7 +1,3 @@
-community-server:8.0.27
-mysql-server:8.0.27
-1
----
 community-server:8.0.28
 mysql-server:8.0.28
 1
@@ -76,10 +72,6 @@ mysql/community-server:9.1.0
 ---
 community-server:9.2.0
 mysql/community-server:9.2.0
-1
----
-community-router:8.0.27
-mysql-router:8.0.27
 1
 ---
 community-router:8.0.28
@@ -230,10 +222,6 @@ community-operator:latest
 mysql-operator:latest
 1
 ---
-enterprise-router:8.0.27
-mysql-enterprise-router:8.0.27
-1
----
 enterprise-router:8.0.28
 mysql-enterprise-router:8.0.28
 1
@@ -348,10 +336,6 @@ mysql-enterprise-router:8.4.0-arm64
 ---
 enterprise-router:8.4.0-arm64
 mysql/enterprise-router:8.4.0-arm64
-1
----
-enterprise-server:8.0.27
-mysql-enterprise-server:8.0.27
 1
 ---
 enterprise-server:8.0.28

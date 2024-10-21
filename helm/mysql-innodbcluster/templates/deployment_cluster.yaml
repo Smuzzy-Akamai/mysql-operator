@@ -1,7 +1,7 @@
 {{- $disable_lookups:= .Values.disableLookups }}
 {{- $cluster_name :=  default "mycluster" .Release.Name }}
 {{- $use_self_signed := default false ((.Values.tls).useSelfSigned) }}
-{{- $minimalVersion := "8.0.27" }}
+{{- $minimalVersion := "8.0.28" }}
 {{- $forbiddenVersions := list "8.0.29" }}
 {{- $imagePullPolicies := list "ifnotpresent" "always" "never" }}
 {{- $serverVersion := .Values.serverVersion | default .Chart.AppVersion }}
