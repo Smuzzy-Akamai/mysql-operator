@@ -517,7 +517,8 @@ def describe_cj(ns, name, cmd_output_log=KubectlCmdOutputLogging.DIAGNOSTICS):
 
 #
 
-def delete(ns, rsrc, name, timeout, wait=True):
+def delete(ns, rsrc, name, timeout, wait=True, additional_args=None):
+
     if not name:
         name = "--all"
     args = []
@@ -525,6 +526,8 @@ def delete(ns, rsrc, name, timeout, wait=True):
         args += ["-n", ns]
     if not wait:
         args += ["--wait=false"]
+    if additional_args is not None:
+        args += additional_args
 
     kubectl("delete", rsrc, [name] + args, timeout=timeout, ignore=["NotFound"], timeout_diagnostics=lambda: store_diagnostics(ns, rsrc, name))
 
@@ -543,8 +546,11 @@ def delete_mbks(ns, prefix, timeout=240):
             delete_mbk(ns, mbk["NAME"], timeout)
 
 
-def delete_po(ns, name, timeout=240):
-    delete(ns, "po", name, timeout=timeout)
+def delete_po(ns, name, timeout=240, force=False):
+    additional_args = []
+    if force:
+        additional_args += ["--force", "--grace-period", "0"]
+    delete(ns, "po", name, timeout=timeout, additional_args=additional_args)
 
 
 def delete_sts(ns, name, timeout=5):
