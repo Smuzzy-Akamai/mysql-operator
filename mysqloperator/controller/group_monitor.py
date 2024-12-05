@@ -10,7 +10,6 @@ from mysqloperator.controller.innodbcluster.cluster_api import InnoDBCluster
 
 from mysqloperator.controller.shellutils import RetryLoop
 from . import shellutils
-from logging import Logger, getLogger
 import threading
 import time
 import select
@@ -37,7 +36,6 @@ class MonitoredCluster:
         self.last_view_id = None
 
         self.handler = handler
-        self.logger: Logger = getLogger(f"CM_{self.cluster.name}")
 
     @property
     def name(self) -> str:
@@ -50,7 +48,7 @@ class MonitoredCluster:
     def ensure_connected(self) -> Optional['mysqlx.Session']:
         # TODO run a ping every X seconds
         if not self.session and (not self.last_connect_attempt or time.time() - self.last_connect_attempt > k_connect_retry_interval):
-            self.logger.info(f"Trying to connect to a member of cluster {self.cluster.namespace}/{self.cluster.name}")
+            print(f"GroupMonitor: Trying to connect to a member of cluster {self.cluster.namespace}/{self.cluster.name}")
             self.last_connect_attempt = time.time()
             self.session = None
             self.connect_to_primary()
@@ -58,10 +56,10 @@ class MonitoredCluster:
             # force a refresh after we connect so we don't miss anything
             # that happened while we were out
             if self.session:
-                self.logger.info(f"Connection to member of {self.cluster.namespace}/{self.cluster.name} OK {self.session}")
+                print(f"GroupMonitor: Connect member of {self.cluster.namespace}/{self.cluster.name} OK {self.session}")
                 self.on_view_change(None)
             else:
-                self.logger.error(f"Connection to member of {self.cluster.namespace}/{self.cluster.name} FAILED")
+                print(f"GroupMonitor: Connect to member of {self.cluster.namespace}/{self.cluster.name} failed")
 
         return self.session
 
@@ -70,9 +68,9 @@ class MonitoredCluster:
             session, is_primary = self.find_primary()
             if not is_primary:
                 if session:
-                    self.logger.error(f"Could not connect to PRIMARY of cluster {self.cluster.namespace}/{self.cluster.name}")
+                    print(f"GroupMonitor: Could not connect to PRIMARY of cluster {self.cluster.namespace}/{self.cluster.name}")
                 else:
-                    self.logger.error(f"Could not connect to neither PRIMARY nor SECONDARY of cluster {self.cluster.namespace}/{self.cluster.name}")
+                    print(f"GroupMonitor: Could not connect to PRIMARY nor SECONDARY of cluster {self.cluster.namespace}/{self.cluster.name}")
 
             if session:
                 try:
@@ -129,7 +127,7 @@ class MonitoredCluster:
         try:
             session = mysqlx.get_session(pod.xendpoint_co)
         except mysqlsh.Error as e:
-            self.logger.error(f"ERROR CONNECTING TO {pod.xendpoint}: {e}")
+            print(f"GroupMonitor: Error connecting to {pod.xendpoint}: {e}")
             return None
 
         return session
@@ -142,13 +140,14 @@ class MonitoredCluster:
                 notice = self.session._fetch_notice()
                 if not notice:
                     break
-                self.logger.info(f"GOT NOTICE {notice}")
+                print(f"GOT NOTICE {notice}")
                 self.on_view_change(notice.get("view_id"))
                 if not self.session:
                     break
 
             except mysqlsh.Error as e:
-                self.logger.error(f"ERROR FETCHING NOTICE: dest={self.target} error={e}")
+                print(
+                    f"GroupMonitor: Error fetching notice: dest={self.target} error={e}")
                 self.session.close()
                 self.session = None
                 break
@@ -171,7 +170,8 @@ class MonitoredCluster:
 
         # force reconnection if the PRIMARY changed or we're not connected to the PRIMARY
         if self.target_not_primary or force_reconnect:
-            self.logger.info(f"PRIMARY changed for {self.cluster.namespace}/{self.cluster.name}")
+            print(
+                f"GroupMonitor: PRIMARY changed for {self.cluster.namespace}/{self.cluster.name}")
             if self.session:
                 self.session.close()
                 self.session = None
@@ -185,8 +185,6 @@ class GroupMonitor(threading.Thread):
         self.clusters : List[MonitoredCluster] = []
         self.stopped = False
 
-        self.logger: Logger = getLogger("GROUP_MONITOR")
-
     def monitor_cluster(self, cluster: InnoDBCluster,
                         handler: Callable[[InnoDBCluster, list[tuple], bool], None],
                         logger: Logger) -> None:
@@ -195,17 +193,16 @@ class GroupMonitor(threading.Thread):
                 return
 
         # We could get called here before the Secret is ready
-        account = RetryLoop(self.logger).call(cluster.get_admin_account)
+        account = RetryLoop(logger).call(cluster.get_admin_account)
 
         target = MonitoredCluster(cluster, account, handler)
         self.clusters.append(target)
-        self.logger.info(f"ADDED A MONITOR FOR {cluster.namespace}/{cluster.name}")
+        print(f"Added monitor for {cluster.namespace}/{cluster.name}")
 
     def remove_cluster(self, cluster: InnoDBCluster) -> None:
         for c in self.clusters:
             if c.name == cluster.name and c.namespace == cluster.namespace:
                 self.clusters.remove(c)
-                self.logger.info(f"REMOVED THE MONITOR OF CLUSTER {cluster.namespace}/{cluster.name}")
                 break
 
     def run(self) -> None:
