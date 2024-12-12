@@ -1,4 +1,6 @@
 image:
+#  registry: container-registry.oracle.com
+#  repository: mysql
   pullPolicy: IfNotPresent
   pullSecrets:
     enabled: false

@@ -70,7 +70,20 @@ spec:
   edition: {{ .Values.edition | quote }}
   {{- end }}
   serviceAccountName: {{ .Release.Name }}-sa
+  #imageRepository
+  {{- if and (not (((.Values).image).registry)) (not (((.Values).image).repository)) }}
+  ## Neither registry nor repository provided - OK
+  {{- else if (((.Values).image).registry) }}
+  ## registry provided
+  {{- if (((.Values).image).repository) }}
+  ## repository provided
+  {{- end }}
+  imageRepository: {{ trimSuffix "/" .Values.image.registry }}{{- if (((.Values).image).repository) }}/{{ trimSuffix "/" .Values.image.repository | trimPrefix "/" }}{{ end }}
+  {{- else if (((.Values).image).repository) }}
+    {{- fail "image.repository provided but image.registry is not or is empty" }}
+  {{- end }}
 
+  #TLS
 {{- if not $use_self_signed }}
   {{- $default_secret_name := printf "%s-ca" $cluster_name }}
   {{- $secret_name := default $default_secret_name ((.Values.tls).caSecretName) }}
