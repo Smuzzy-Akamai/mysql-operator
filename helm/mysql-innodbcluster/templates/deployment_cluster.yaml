@@ -41,6 +41,12 @@ spec:
 {{- if (((.Values).router).podSpec) }}
     podSpec:  {{ toYaml (((.Values).router).podSpec) | nindent 6 }}
 {{- end }}
+{{- if (((.Values).router).options) }}
+    options:  {{ toYaml (((.Values).router).options) | nindent 6 }}
+{{- end }}
+{{- if (((.Values).router).bootstrapOptions) }}
+    bootstrapOptions:  {{ toYaml (((.Values).router).bootstrapOptions) | nindent 6 }}
+{{- end }}
 {{- if (((.Values).router).podLabels) }}
     podLabels: {{ toYaml (((.Values).router).podLabels) | nindent 6 }}
 {{- end }}
