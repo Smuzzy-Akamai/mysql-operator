@@ -186,7 +186,10 @@ def populate_with_clone(datadir: str, session: 'ClassicSession', cluster: InnoDB
     # create local accounts again since the donor may not have them
     create_local_accounts(session, logger)
 
+    create_admin_account(session, cluster, logger)
+
     # reset password of the IC admin account
+    # this won't be done by create and may be needed if donor contains such an account
     admin_user, admin_pass = cluster.get_admin_account()
     logger.info(f"Resetting password for {admin_user}@%")
     session.run_sql("SET PASSWORD FOR ?@'%'=?", [admin_user, admin_pass])
