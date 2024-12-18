@@ -20,11 +20,11 @@ else:
 
 
 # Constants
-OPERATOR_VERSION = "2.2.3"
+OPERATOR_VERSION = "2.2.4"
 OPERATOR_EDITION = Edition.community
 OPERATOR_EDITION_NAME_TO_ENUM = { edition.value : edition.name for edition in Edition }
 
-DEFAULT_VERSION_TAG = "9.2.0"
+DEFAULT_VERSION_TAG = "9.3.0"
 
 MIN_BASE_SERVER_ID = 1
 MAX_BASE_SERVER_ID = 4000000000
