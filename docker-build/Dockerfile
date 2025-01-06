@@ -6,7 +6,7 @@
 FROM %%MYSQL_OPERATOR_PYTHON_DEPS%%
 
 
-RUN rpm -U %%MYSQL_REPO_URL%%/%%MYSQL_CONFIG_PKG%%-el8.rpm \
+RUN rpm -U %%MYSQL_REPO_URL%%/%%MYSQL_CONFIG_PKG%%-el9.rpm \
   && microdnf update && echo "[main]" > /etc/dnf/dnf.conf \
   && microdnf install --enablerepo=%%MYSQL_SHELL_REPO%% -y glibc-langpack-en mysql-shell-%%MYSQL_SHELL_VERSION%% \
   && microdnf remove %%MYSQL_CONFIG_PKG%% \
