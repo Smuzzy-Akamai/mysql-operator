@@ -216,6 +216,7 @@ class ClusterController:
         assume_gtid_set_complete = False
         initial_data_source = "blank"
         if self.cluster.parsed_spec.initDB:
+            logger.info("initDB")
             # TODO store version
             # TODO store last known quorum
             if self.cluster.parsed_spec.initDB.clone:
@@ -234,10 +235,11 @@ class ClusterController:
             else:
                 assert 0, "Unknown initDB source"
         else:
+            logger.info("No initDB")
             # We're creating the cluster from scratch, so GTID set is sure to be complete
             assume_gtid_set_complete = True
 
-
+        logger.info("Create cluster options")
         # The operator manages GR, so turn off start_on_boot to avoid conflicts
         create_options = {
             "gtidSetIsComplete": assume_gtid_set_complete,
@@ -526,9 +528,10 @@ class ClusterController:
             member_id, role, status, view_id, version, member_count, reachable_member_count = minfo
             logger.info(f"JOINED {pod.name}: {minfo}")
 
-        # if the cluster size is complete, ensure routers are deployed
-        if not router_objects.get_size(self.cluster) and member_count == self.cluster.parsed_spec.instances:
-            self.post_create_actions(self.dba.session, self.dba_cluster, logger)
+            # if the cluster size is complete, ensure routers are deployed
+            if not router_objects.get_size(self.cluster) and member_count == self.cluster.parsed_spec.instances:
+                self.post_create_actions(self.dba.session, self.dba_cluster, logger)
+
 
     def rejoin_instance(self, pod: MySQLPod, pod_session, logger: Logger) -> None:
         logger.info(f"Rejoining {pod.endpoint} to cluster")
@@ -739,10 +742,10 @@ class ClusterController:
         pass
 
     def on_pod_created(self, pod: MySQLPod, logger: Logger) -> None:
-        print("on_pod_created: probing cluster")
+        logger.info(f"on_pod_created: pod={pod.name} probing cluster")
         diag = self.probe_status(logger)
 
-        print(f"on_pod_created: pod={pod.name} primary={diag.primary} cluster_state={diag.status}")
+        logger.info(f"on_pod_created: pod={pod.name} primary={diag.primary} cluster_state={diag.status}")
 
         if diag.status == diagnose.ClusterDiagStatus.INITIALIZING:
             # If cluster is not yet created, then we create it at pod-0
@@ -751,25 +754,28 @@ class ClusterController:
                     raise kopf.PermanentError(
                         f"Internal inconsistency: cluster marked as initialized, but create requested again")
 
-                print("Time to create the cluster")
+                logger.info("Time to create the cluster")
                 shellutils.RetryLoop(logger).call(self.create_cluster, pod, logger)
 
                 # Mark the cluster object as already created
+                logger.info("Setting cluster create time")
                 self.cluster.set_create_time(datetime.datetime.now())
             else:
                 # Other pods must wait for the cluster to be ready
+                logger.info("Will raise a temporary error. Delay is 15 secs")
                 raise kopf.TemporaryError("Cluster is not yet ready", delay=15)
 
         elif diag.status in (diagnose.ClusterDiagStatus.ONLINE, diagnose.ClusterDiagStatus.ONLINE_PARTIAL, diagnose.ClusterDiagStatus.ONLINE_UNCERTAIN):
-            print("Reconciling pod")
+            logger.info("Reconciling pod")
             # Cluster exists and is healthy, join the pod to it
             shellutils.RetryLoop(logger).call(
                 self.reconcile_pod, diag.primary, pod, logger)
         else:
-            print("Attempting to repair the cluster")
+            logger.info("Attempting to repair the cluster")
             self.repair_cluster(pod, diag, logger)
 
             # Retry from scratch in another iteration
+            logger.info("Will raise a temporary error. Delay is 5 secs")
             raise kopf.TemporaryError(f"Cluster repair from state {diag.status} attempted", delay=5)
 
     def on_pod_restarted(self, pod: MySQLPod, logger: Logger) -> None:
