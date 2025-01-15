@@ -796,12 +796,13 @@ def on_pod_create(body: Body, logger: Logger, **kwargs):
     # check general assumption
     assert not pod.deleting
 
-    print(f"on_pod_create: pod={pod.name} ContainersReady={pod.check_condition('ContainersReady')} Ready={pod.check_condition('Ready')} gate[configured]={pod.get_member_readiness_gate('configured')}")
+    logger.info(f"on_pod_created({pod.name}): ContainersReady={pod.check_condition('ContainersReady')} gate[ready]={pod.check_condition('Ready')} gate[configured]={pod.get_member_readiness_gate('configured')}")
 
     configured = pod.get_member_readiness_gate("configured")
     if not configured:
         # TODO add extra diagnostics about why the pod is not ready yet, for
         # example, unbound volume claims, initconf not finished etc
+        logger.info(f"on_pod_created({pod.name}): will have to wait for 30 secs before reattemtping")
         raise kopf.TemporaryError(f"Sidecar of {pod.name} is not yet configured", delay=30)
 
     # If we are here all containers have started. This means, that if we are initializing
@@ -810,12 +811,12 @@ def on_pod_create(body: Body, logger: Logger, **kwargs):
     cluster = pod.get_cluster()
 
     assert cluster
-    logger.info(f"on_pod_create: cluster create time {cluster.get_create_time()}")
+    logger.info(f"on_pod_created({pod.name}): cluster create time {cluster.get_create_time()}")
 
     with ClusterMutex(cluster, pod):
         first_pod = pod.index == 0 and not cluster.get_create_time()
         if first_pod:
-            print("on_pod_create: first pod created")
+            logger.info(f"on_pod_created({pod.name}): first pod created")
             cluster_objects.on_first_cluster_pod_created(cluster, logger)
 
             g_group_monitor.monitor_cluster(
