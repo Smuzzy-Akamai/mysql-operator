@@ -528,25 +528,29 @@ def on_pod_create(body: Body, logger: Logger, **kwargs):
     # check general assumption
     assert not pod.deleting
 
-    logger.info(f"POD CREATED: pod={pod.name} ContainersReady={pod.check_condition('ContainersReady')} Ready={pod.check_condition('Ready')} gate[configured]={pod.get_member_readiness_gate('configured')}")
+    logger.info(f"on_pod_created({pod.name}): ContainersReady={pod.check_condition('ContainersReady')} gate[ready]={pod.check_condition('Ready')} gate[configured]={pod.get_member_readiness_gate('configured')}")
 
     configured = pod.get_member_readiness_gate("configured")
     if not configured:
         # TODO add extra diagnostics about why the pod is not ready yet, for
         # example, unbound volume claims, initconf not finished etc
+        logger.info(f"on_pod_created({pod.name}): will have to wait for 30 secs before reattemtping")
         raise kopf.TemporaryError(f"Sidecar of {pod.name} is not yet configured", delay=30)
 
+    logger.info(f"on_pod_created({pod.name}): fetching cluster")
     # If we are here all containers have started. This means, that if we are initializing
     # the database from a donor (cloning) the sidecar has already started a seed instance
     # and cloned from the donor into it (see initdb.py::start_clone_seed_pod())
     cluster = pod.get_cluster()
-    logger.info(f"CLUSTER DELETING={cluster.deleting}")
+    logger.info(f"on_pod_created({pod.name}): CLUSTER DELETING={cluster.deleting}")
 
     assert cluster
+    logger.info(f"on_pod_created({pod.name}): cluster create time {cluster.get_create_time()}")
 
     with ClusterMutex(cluster, pod):
         first_pod = pod.index == 0 and not cluster.get_create_time()
         if first_pod:
+            logger.info(f"on_pod_created({pod.name}): first pod created")
             cluster_objects.on_first_cluster_pod_created(cluster, logger)
 
             g_group_monitor.monitor_cluster(
