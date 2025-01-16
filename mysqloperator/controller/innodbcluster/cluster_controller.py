@@ -754,28 +754,28 @@ class ClusterController:
                     raise kopf.PermanentError(
                         f"Internal inconsistency: cluster marked as initialized, but create requested again")
 
-                logger.info(f"on_pod_created({pod.name}): Time to create the cluster")
+                print(f"on_pod_created({pod.name}): Time to create the cluster")
                 shellutils.RetryLoop(logger).call(self.create_cluster, pod, logger)
 
                 # Mark the cluster object as already created
-                logger.info(f"on_pod_created({pod.name}): Setting cluster create time")
+                print(f"on_pod_created({pod.name}): Setting cluster create time")
                 self.cluster.set_create_time(datetime.datetime.now())
             else:
                 # Other pods must wait for the cluster to be ready
-                logger.info(f"on_pod_created({pod.name}): Will raise a temporary error. Delay is 15 secs")
+                print(f"on_pod_created({pod.name}): Will raise a temporary error. Delay is 15 secs")
                 raise kopf.TemporaryError("Cluster is not yet ready", delay=15)
 
         elif diag.status in (diagnose.ClusterDiagStatus.ONLINE, diagnose.ClusterDiagStatus.ONLINE_PARTIAL, diagnose.ClusterDiagStatus.ONLINE_UNCERTAIN):
-            logger.info(f"on_pod_created({pod.name}): Reconciling pod")
+            print(f"on_pod_created({pod.name}): Reconciling pod")
             # Cluster exists and is healthy, join the pod to it
             shellutils.RetryLoop(logger).call(
                 self.reconcile_pod, diag.primary, pod, logger)
         else:
-            logger.info(f"on_pod_created({pod.name}): Attempting to repair the cluster")
+            print(f"on_pod_created({pod.name}): Attempting to repair the cluster")
             self.repair_cluster(pod, diag, logger)
 
             # Retry from scratch in another iteration
-            logger.info(f"on_pod_created({pod.name}): Will raise a temporary error. Delay is 5 secs")
+            print(f"on_pod_created({pod.name}): Will raise a temporary error. Delay is 5 secs")
             raise kopf.TemporaryError(f"Cluster repair from state {diag.status} attempted", delay=5)
 
     def on_pod_restarted(self, pod: MySQLPod, logger: Logger) -> None:
