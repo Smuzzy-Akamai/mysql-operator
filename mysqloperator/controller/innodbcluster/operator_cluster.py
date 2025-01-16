@@ -528,14 +528,14 @@ def on_pod_create(body: Body, logger: Logger, **kwargs):
     # check general assumption
     assert not pod.deleting
 
-    logger.info(f"on_pod_created({pod.name}): ContainersReady={pod.check_condition('ContainersReady')} gate[ready]={pod.check_condition('Ready')} gate[configured]={pod.get_member_readiness_gate('configured')}")
+    print(f"on_pod_created({pod.name}): ContainersReady={pod.check_condition('ContainersReady')} gate[ready]={pod.check_condition('Ready')} gate[configured]={pod.get_member_readiness_gate('configured')}")
 
     configured = pod.get_member_readiness_gate("configured")
     if not configured:
         # TODO add extra diagnostics about why the pod is not ready yet, for
         # example, unbound volume claims, initconf not finished etc
-        logger.info(f"on_pod_created({pod.name}): will have to wait for 30 secs before reattemtping")
-        raise kopf.TemporaryError(f"Sidecar of {pod.name} is not yet configured", delay=30)
+        print(f"on_pod_created({pod.name}): will have to wait for 15 secs before reattemtping")
+        raise kopf.TemporaryError(f"Sidecar of {pod.name} is not yet configured. Waiting for 45 seconds", delay=45)
 
     logger.info(f"on_pod_created({pod.name}): fetching cluster")
     # If we are here all containers have started. This means, that if we are initializing
