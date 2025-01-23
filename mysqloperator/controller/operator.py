@@ -26,6 +26,7 @@ def on_startup(settings: kopf.OperatorSettings, logger: Logger, *args, **_):
 
     # don't post logger.debug() calls as k8s events
     settings.posting.level = logging.INFO
+    settings.posting.enabled = False
 
     # Change the annotation field for storing kopf state, so that the main operator
     # and the pod controller don't collide
