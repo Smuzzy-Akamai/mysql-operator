@@ -11,7 +11,7 @@ image:
 
 envs:
     imagesPullPolicy: IfNotPresent
-    imagesDefaultRegistry: 
+    imagesDefaultRegistry:
     imagesDefaultRepository:
     k8sClusterDomain:
 
@@ -19,3 +19,7 @@ envs:
 # to turn disableLookups on as during `helm template` Helm won't contact the kube API
 # and all lookups will thus fail
 disableLookups: false
+debugger:
+  enabled: false
+  bindip: 0.0.0.0
+  bindport: 9009
