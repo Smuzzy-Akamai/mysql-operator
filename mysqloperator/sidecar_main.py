@@ -706,6 +706,7 @@ def on_secret_create_or_update(name: str, namespace: str, spec, new, logger: Log
 def configure(settings: kopf.OperatorSettings, logger: Logger, *args, **_):
     logger.info("sidecar: configure()")
     settings.peering.standalone = True
+    settings.posting.enabled = False
 
 
 def main(argv):
