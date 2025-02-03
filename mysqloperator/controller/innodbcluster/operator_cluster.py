@@ -133,7 +133,7 @@ def do_create_read_replica(cluster: InnoDBCluster, rr: cluster_objects.ReadRepli
     print(f"{indention}RR STS")
     if not ignore_404(lambda: cluster.get_read_replica_stateful_set(rr.name)):
         print(f"{indention}\tPreparing {rr.name} StatefulSet")
-        statefulset = cluster_objects.prepare_cluster_stateful_set(rr, logger)
+        statefulset = cluster_objects.prepare_cluster_stateful_set(cluster, rr, logger)
         if set_replicas_to_zero:
             # This is initial startup where scaling the read reaplica is delayed
             # till the clsuter is read
@@ -146,7 +146,7 @@ def do_create_read_replica(cluster: InnoDBCluster, rr: cluster_objects.ReadRepli
 def do_reconcile_read_replica(cluster: InnoDBCluster,
                               rr: cluster_objects.ReadReplicaSpec,
                               logger: Logger) -> None:
-    statefulset = cluster_objects.prepare_cluster_stateful_set(rr, logger)
+    statefulset = cluster_objects.prepare_cluster_stateful_set(cluster, rr, logger)
     kopf.adopt(statefulset)
     api_apps.patch_namespaced_stateful_set(namespace=cluster.namespace,
                                            name=rr.name,
@@ -290,7 +290,7 @@ def on_innodbcluster_create(name: str, namespace: Optional[str], body: Body,
             print("9. Cluster StatefulSet")
             if not ignore_404(cluster.get_stateful_set):
                 print("\tPreparing...")
-                statefulset = cluster_objects.prepare_cluster_stateful_set(icspec, logger)
+                statefulset = cluster_objects.prepare_cluster_stateful_set(cluster, icspec, logger)
                 print(f"\tCreating...{statefulset}")
                 kopf.adopt(statefulset)
                 api_apps.create_namespaced_stateful_set(namespace=namespace, body=statefulset)
@@ -337,10 +337,12 @@ def on_innodbcluster_create(name: str, namespace: Optional[str], body: Body,
             print("14. Backup Secrets")
             if not ignore_404(cluster.get_backup_account):
                 print("\tPreparing...")
-                secret = backup_objects.prepare_backup_secrets(icspec)
+                secrets = backup_objects.prepare_backup_secrets(icspec)
                 print("\tCreating...")
-                kopf.adopt(secret)
-                api_core.create_namespaced_secret(namespace=namespace, body=secret)
+                for secret in secrets:
+                    print("\t\t", secret["metadata"]["name"])
+                    kopf.adopt(secret)
+                    api_core.create_namespaced_secret(namespace=namespace, body=secret)
 
             print("15. Service Monitors")
             monitors = cluster_objects.prepare_metrics_service_monitors(cluster.parsed_spec, logger)
@@ -665,7 +667,7 @@ def on_innodbcluster_field_backup_schedules(old: str, new: str, body: Body,
 
 def on_sts_field_update(cluster: InnoDBCluster, field: str, patcher: cluster_objects.InnoDBClusterObjectModifier, logger: Logger) -> None:
     cluster.parsed_spec.validate(logger)
-    patcher.patch_sts(cluster_objects.prepare_cluster_stateful_set(cluster.parsed_spec, logger))
+    patcher.patch_sts(cluster_objects.prepare_cluster_stateful_set(cluster, cluster.parsed_spec, logger))
 
 
 def on_innodbcluster_field_tls_use_self_signed(old: dict, new: dict, body: Body, cluster: InnoDBCluster, patcher: cluster_objects.InnoDBClusterObjectModifier, logger: Logger) -> None:
