@@ -526,9 +526,9 @@ class ClusterController:
             member_id, role, status, view_id, version, member_count, reachable_member_count = minfo
             logger.info(f"JOINED {pod.name}: {minfo}")
 
-        # if the cluster size is complete, ensure routers are deployed
-        if not router_objects.get_size(self.cluster) and member_count == self.cluster.parsed_spec.instances:
-            self.post_create_actions(self.dba.session, self.dba_cluster, logger)
+            # if the cluster size is complete, ensure routers are deployed
+            if not router_objects.get_size(self.cluster) and member_count == self.cluster.parsed_spec.instances:
+                self.post_create_actions(self.dba.session, self.dba_cluster, logger)
 
     def rejoin_instance(self, pod: MySQLPod, pod_session, logger: Logger) -> None:
         logger.info(f"Rejoining {pod.endpoint} to cluster")
