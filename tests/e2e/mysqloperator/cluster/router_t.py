@@ -465,8 +465,6 @@ spec:
 
 
     def test_2_update_bootstrap_config(self):
-        [old_pod] = kutil.ls_po(self.ns, pattern="mycluster-router-.*")
-
         patch = {
             "spec": {
                 "router": {
@@ -476,18 +474,15 @@ spec:
                 }
             }
         }
+        waiter = tutil.get_deploy_rollover_update_waiter(self, "mycluster", timeout=300, delay=5)
         kutil.patch_ic(self.ns, "mycluster", patch, type="merge")
-
-        self.wait_pod_gone(old_pod["NAME"], ns=self.ns)
-        self.wait_routers("mycluster-router-.*", 1)
+        waiter()
 
         [new_pod] = kutil.ls_po(self.ns, pattern="mycluster-router-.*")
         router_config = kutil.cat(self.ns, new_pod["NAME"], "/tmp/mysqlrouter/mysqlrouter.conf")
         self.assertIn(b"name=othername", router_config, "router config does not contain the name")
 
     def test_3_update_config(self):
-        [old_pod] = kutil.ls_po(self.ns, pattern="mycluster-router-.*")
-
         patch = {
             "spec": {
                 "router": {
@@ -497,10 +492,9 @@ spec:
                 }
             }
         }
+        waiter = tutil.get_deploy_rollover_update_waiter(self, "mycluster", timeout=300, delay=5)
         kutil.patch_ic(self.ns, "mycluster", patch, type="merge")
-
-        self.wait_pod_gone(old_pod["NAME"], ns=self.ns)
-        self.wait_routers("mycluster-router-.*", 1)
+        waiter()
 
         [new_pod] = kutil.ls_po(self.ns, pattern="mycluster-router-.*")
         self.assertTrue(kutil.file_exists(self.ns, new_pod["NAME"], "/tmp/with`backtick"))
@@ -524,6 +518,7 @@ spec:
             }
         }
         kutil.patch_ic(self.ns, "mycluster", patch, type="merge")
+        sleep(5)
         routing_options = get_routing_options(self.ns, "mycluster-0")
         rules = routing_options["configuration"]["routing_rules"]
         self.assertEqual(rules["read_only_targets"], "read_replicas")
@@ -538,6 +533,7 @@ spec:
             }
         }
         kutil.patch_ic(self.ns, "mycluster", patch, type="merge")
+        sleep(5)
         routing_options = get_routing_options(self.ns, "mycluster-0")
         rules = routing_options["configuration"]["routing_rules"]
         self.assertEqual(rules["read_only_targets"], "secondaries")
