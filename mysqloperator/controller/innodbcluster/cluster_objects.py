@@ -659,8 +659,8 @@ fi
 # still making progress and not just stuck waiting on a frozen networked
 # volume, for example.
 
-if [ -f /fail-counter ]; then
-  fail_count=$(($(cat /fail-counter) + 1))
+if [ -f /tmp/fail-counter ]; then
+  fail_count=$(($(cat /tmp/fail-counter) + 1))
 else
   fail_count=1
 fi
@@ -668,11 +668,11 @@ fi
 if [ $fail_count -gt $max_failures_during_progress ]; then
   # Report success to reset the failure counter upstream and get
   # a time extension
-  rm -f /fail-counter
+  rm -f /tmp/fail-counter
   exit 0
 else
   # Update the failure counter and fail out
-  echo $fail_count > /fail-counter
+  echo $fail_count > /tmp/fail-counter
   exit 1
 fi
 """
