@@ -1,4 +1,4 @@
-# Copyright (c) 2020, 2024, Oracle and/or its affiliates.
+# Copyright (c) 2020, 2025, Oracle and/or its affiliates.
 #
 # Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl/
 #
@@ -67,6 +67,18 @@ OCI_BUCKET_NAME = os.getenv(
 
 OCI_VAULT_CONFIG_PATH = os.getenv(
     "OPERATOR_TEST_VAULT_CONFIG_PATH", default=None)
+
+OCI_S3_ENDPOINT = os.getenv(
+    "OPERATOR_TEST_OCI_S3_ENDPOINT", default=None)
+
+OCI_S3_PROFILE = os.getenv(
+    "OPERATOR_TEST_OCI_S3_PROFILE", default=None)
+
+OCI_S3_CONFIG_PATH = os.getenv(
+    "OPERATOR_TEST_OCI_S3_CONFIG_PATH", default=None)
+
+OCI_S3_CREDENTIALS_PATH = os.getenv(
+    "OPERATOR_TEST_OCI_S3_CREDENTIALS_PATH", default=None)
 
 # azure backup
 AZURE_SKIP = os.getenv(
