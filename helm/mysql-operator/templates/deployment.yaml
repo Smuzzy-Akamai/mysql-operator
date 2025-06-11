@@ -74,6 +74,8 @@ spec:
             allowPrivilegeEscalation: false
             privileged: false
             readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
       volumes:
         - name: mysqlsh-home
           emptyDir: {}
