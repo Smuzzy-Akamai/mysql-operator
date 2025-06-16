@@ -70,7 +70,8 @@ spec:
             - name: tmpdir
               mountPath: /tmp
           securityContext:
-            runAsUser: 2
+            runAsUser: 1000
+            runAsGroup: 1000   
             allowPrivilegeEscalation: false
             privileged: false
             readOnlyRootFilesystem: true
