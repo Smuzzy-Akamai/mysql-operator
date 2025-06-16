@@ -268,6 +268,8 @@ spec:
             - FOWNER
             drop:
             - ALL
+          seccompProfile:
+            type: RuntimeDefault
         volumeMounts:
         - name: datadir
           mountPath: /var/lib/mysql
@@ -297,6 +299,9 @@ spec:
           capabilities:
             drop:
             - ALL
+          runAsNonRoot: true  
+          seccompProfile:
+            type: RuntimeDefault
         env:
         - name: POD_NAME
           valueFrom:
@@ -346,6 +351,9 @@ spec:
           capabilities:
             drop:
             - ALL
+          runAsNonRoot: true  
+          seccompProfile:
+            type: RuntimeDefault
         env:
         - name: MYSQL_INITIALIZE_ONLY
           value: "1"
@@ -392,6 +400,9 @@ spec:
           capabilities:
             drop:
             - ALL
+          runAsNonRoot: true  
+          seccompProfile:
+            type: RuntimeDefault
         env:
         - name: POD_NAME
           valueFrom:
@@ -439,6 +450,9 @@ spec:
           capabilities:
             drop:
             - ALL
+          runAsNonRoot: true  
+          seccompProfile:
+            type: RuntimeDefault
         lifecycle:
           preStop:
             exec:
