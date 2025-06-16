@@ -235,6 +235,17 @@ spec:
         runAsUser: 27
         runAsGroup: 27
         fsGroup: 27
+        runAsNonRoot: true  
+        allowPrivilegeEscalation: false
+        privileged: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+          add:
+            - NET_BIND_SERVICE  
+        seccompProfile:
+          type: RuntimeDefault
       terminationGracePeriodSeconds: 120
       initContainers:
       - name: fixdatadir
